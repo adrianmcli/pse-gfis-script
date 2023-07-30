@@ -2,71 +2,62 @@
 import { config } from "dotenv";
 import {
   getOctokitInstance,
-  getLabels,
-  getIssues,
-  getIssuesWithLabel,
-  displayGoodFirstIssues,
   getRepos,
+  processRepo,
 } from "./utils";
-
-config();
+import * as fs from 'fs';
+import * as path from 'path';
 
 config();
 
 const main = async (entities) => {
   const octokit = getOctokitInstance(process.env.ACCESS_TOKEN!);
-  let totalGoodFirstIssues = 0;
+  const result = [];
 
   for (let entity of entities) {
     if (entity.org) {
       const repos = await getRepos(octokit, entity.org);
       for (let repo of repos) {
-        totalGoodFirstIssues += await processRepo(octokit, {
+        const { count, issues, totalOpenIssues } = await processRepo(octokit, {
           owner: repo.owner.login,
           repo: repo.name,
         });
+        result.push({
+          repo: `${repo.owner.login}/${repo.name}`,
+          count,
+          totalOpenIssues,
+          url: repo.html_url,
+          issues,
+        });
       }
     } else if (entity.repo) {
-      totalGoodFirstIssues += await processRepo(octokit, entity.repo);
+      const { count, issues, totalOpenIssues } = await processRepo(octokit, entity.repo);
+      result.push({
+        repo: `${entity.repo.owner}/${entity.repo.repo}`,
+        count,
+        totalOpenIssues,
+        url: `https://github.com/${entity.repo.owner}/${entity.repo.repo}`,
+        issues,
+      });
     }
   }
 
-  console.log(
-    `Total good first issues across all orgs/repos: ${totalGoodFirstIssues}`
-  );
-};
-
-const processRepo = async (octokit, repo) => {
-  try {
-    const labels = await getLabels(octokit, repo);
-    const issues = await getIssues(octokit, repo);
-    const goodFirstIssuesCount = getIssuesWithLabel(
-      issues,
-      "good first issue"
-    ).length;
-
-    console.log(`Repo: ${repo.owner}/${repo.repo}`);
-    console.log(
-      "Good first issue count:",
-      `${goodFirstIssuesCount}/${issues.length}`
-    );
-    displayGoodFirstIssues(issues, "good first issue");
-
-    return goodFirstIssuesCount;
-  } catch (error) {
-    console.error(`Error processing repo ${repo.owner}/${repo.repo}:`, error);
-    return 0;
+  const outputDir = path.join(__dirname, 'out');
+  if (!fs.existsSync(outputDir)) {
+    fs.mkdirSync(outputDir);
   }
+
+  fs.writeFileSync(path.join(outputDir, 'pse-gfis.json'), JSON.stringify(result, null, 2));
+  console.log(`Results written to ${path.join(outputDir, 'pse-gfis.json')}`);
 };
 
 const entities = [
   { org: "semaphore-protocol" },
   { org: "Unirep" },
   { org: "Rate-Limiting-Nullifier" },
-  { org: "privacy-scaling-explorations" },
+  // { org: "privacy-scaling-explorations" },
   // { repo: { owner: "privacy-scaling-explorations", repo: "maci" } },
-  // { repo: { owner: "privacy-scaling-explorations", repo: "zkevm-circuits" } },
-  // Add orgs and repos here
+  // Add more orgs and repos here
 ];
 
 main(entities);

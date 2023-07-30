@@ -12,32 +12,29 @@ export const getRepos = async (octokit: Octokit, org: string) => {
   return data;
 };
 
-export const getIssues = async (octokit: Octokit, repo: Repo) => {
-  const { data } = await octokit.request(
+export const processRepo = async (octokit: Octokit, repo: Repo) => {
+  const { data: issues } = await octokit.request(
     "GET /repos/{owner}/{repo}/issues",
     repo
   );
-  return data;
-};
 
-export const getLabels = async (octokit: Octokit, repo: Repo) => {
-  const { data } = await octokit.request(
-    "GET /repos/{owner}/{repo}/labels",
-    repo
+  const totalOpenIssues = issues.length;
+
+  const goodFirstIssues = issues.filter((issue) =>
+    issue.labels.some(
+      (label) =>
+        typeof label === "object" &&
+        ["good first issue", "good-first-issue", "good first issues"].includes(
+          label.name?.toLowerCase() || ""
+        )
+    )
   );
-  return data;
-};
 
-export const getIssuesWithLabel = (issues, target) => {
-  return issues.filter((issue) =>
-    issue.labels.map((label) => label.name).includes(target)
-  );
-};
+  const details = goodFirstIssues.map((issue) => ({
+    number: issue.number,
+    title: issue.title,
+    url: issue.html_url,
+  }));
 
-export const displayGoodFirstIssues = (issues, target) => {
-  const goodFirstIssues = getIssuesWithLabel(issues, target);
-  goodFirstIssues.forEach((issue) => {
-    console.log(`Issue Title: ${issue.title}`);
-    console.log(`Issue URL: ${issue.html_url}`);
-  });
+  return { count: goodFirstIssues.length, issues: details, totalOpenIssues };
 };
